@@ -59,6 +59,13 @@ namespace osu.Framework.Platform
         /// </summary>
         protected virtual bool RequireWindowExists => true;
 
+        /// <summary>
+        /// Whether a platform event loop will call <see cref="RunMainLoopFrame"/> externally.
+        /// Browser hosts use this to return from <see cref="Run"/> after initialisation and
+        /// advance the game from requestAnimationFrame.
+        /// </summary>
+        protected virtual bool UsesExternalMainLoop => false;
+
         public IRenderer Renderer { get; private set; }
 
         public string RendererInfo { get; private set; }
@@ -806,7 +813,7 @@ namespace osu.Framework.Platform
 
                         Window.Run();
                     }
-                    else
+                    else if (!UsesExternalMainLoop)
                     {
                         while (ExecutionState != ExecutionState.Stopped)
                             RunMainLoopFrame();
