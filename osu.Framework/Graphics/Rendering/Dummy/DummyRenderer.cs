@@ -14,7 +14,7 @@ namespace osu.Framework.Graphics.Rendering.Dummy
     /// <summary>
     /// An <see cref="IRenderer"/> that does nothing. May be used for tests that don't have a visual output.
     /// </summary>
-    public sealed class DummyRenderer : Renderer
+    public class DummyRenderer : Renderer
     {
         protected internal override bool VerticalSync { get; set; } = true;
         protected internal override bool AllowTearing { get; set; }
