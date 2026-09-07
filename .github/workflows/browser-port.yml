@@ -14,7 +14,9 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
-      - name: Compile framework with browser host
-        run: dotnet build osu.Framework/osu.Framework.csproj --configuration Release
+      - name: Compile .NET 8 browser framework
+        run: dotnet build osu.Framework/osu.Framework.csproj --configuration Release -p:OsuBrowserBuild=true
