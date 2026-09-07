@@ -41,6 +41,12 @@ namespace osu.Framework.Threading
             this.name = name;
             tasks = new BlockingCollection<Task>();
 
+#if OSU_BROWSER
+            // Browser WebAssembly currently runs the framework in single-threaded mode.
+            // Creating managed threads throws during CompositeDrawable type initialisation,
+            // so browser tasks are executed synchronously by QueueTask below.
+            threads = ImmutableArray<Thread>.Empty;
+#else
             threads = Enumerable.Range(0, numberOfThreads).Select(_ =>
             {
                 var thread = new Thread(processTasks)
@@ -53,6 +59,7 @@ namespace osu.Framework.Threading
 
                 return thread;
             }).ToImmutableArray();
+#endif
         }
 
         /// <summary>
@@ -82,6 +89,9 @@ namespace osu.Framework.Threading
         /// <param name="task">The task to be executed.</param>
         protected override void QueueTask(Task task)
         {
+#if OSU_BROWSER
+            TryExecuteTask(task);
+#else
             try
             {
                 tasks.Add(task);
@@ -92,6 +102,7 @@ namespace osu.Framework.Threading
                 Logger.Log($"Task was queued for execution on a {nameof(ThreadedTaskScheduler)} ({name}) after it was disposed. The task will be executed inline.");
                 TryExecuteTask(task);
             }
+#endif
         }
 
         /// <summary>
@@ -106,10 +117,22 @@ namespace osu.Framework.Threading
         /// <param name="task">The task to be executed.</param>
         /// <param name="taskWasPreviouslyQueued">Whether the task was previously queued.</param>
         /// <returns>true if the task was successfully inlined; otherwise, false.</returns>
-        protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued) => threads.Contains(Thread.CurrentThread) && TryExecuteTask(task);
+        protected override bool TryExecuteTaskInline(Task task, bool taskWasPreviouslyQueued)
+        {
+#if OSU_BROWSER
+            return TryExecuteTask(task);
+#else
+            return threads.Contains(Thread.CurrentThread) && TryExecuteTask(task);
+#endif
+        }
 
         /// <summary>Gets the maximum concurrency level supported by this scheduler.</summary>
-        public override int MaximumConcurrencyLevel => threads.Length;
+        public override int MaximumConcurrencyLevel =>
+#if OSU_BROWSER
+            1;
+#else
+            threads.Length;
+#endif
 
         private int pendingTaskCount
         {
