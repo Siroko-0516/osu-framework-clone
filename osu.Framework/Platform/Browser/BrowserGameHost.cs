@@ -7,6 +7,7 @@ using osu.Framework.Configuration;
 using osu.Framework.Graphics.Rendering.Dummy;
 using osu.Framework.Input.Handlers;
 using osu.Framework.Logging;
+using osu.Framework.Threading;
 
 namespace osu.Framework.Platform
 {
