@@ -148,8 +148,9 @@ namespace osu.Framework.Audio
         internal readonly IBindable<int?> GlobalMixerHandle = new Bindable<int?>();
 
         public override bool IsLoaded => base.IsLoaded &&
+                                         (RuntimeInfo.IsBrowser ||
                                          // bass default device is a null device (-1), not the actual system default.
-                                         Bass.CurrentDevice != Bass.DefaultDevice;
+                                         Bass.CurrentDevice != Bass.DefaultDevice);
 
         // Mutated by multiple threads, must be thread safe.
         private ImmutableArray<DeviceInfo> audioDevices = ImmutableArray<DeviceInfo>.Empty;
@@ -219,6 +220,9 @@ namespace osu.Framework.Audio
                 return store;
             });
 
+            if (RuntimeInfo.IsBrowser)
+                return;
+
             syncAudioDevices();
 
             // check for changes in any audio devices every 1000ms (slightly expensive operation)
@@ -272,7 +276,9 @@ namespace osu.Framework.Audio
 
         private AudioMixer createAudioMixer(AudioMixer fallbackMixer, string identifier)
         {
-            var mixer = new BassAudioMixer(this, fallbackMixer, identifier);
+            AudioMixer mixer = RuntimeInfo.IsBrowser
+                ? new BrowserAudioMixer(fallbackMixer, identifier)
+                : new BassAudioMixer(this, fallbackMixer, identifier);
             AddItem(mixer);
             return mixer;
         }
