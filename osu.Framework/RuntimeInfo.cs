@@ -45,6 +45,7 @@ namespace osu.Framework
         public static bool IsDesktop => OS == Platform.Linux || OS == Platform.macOS || OS == Platform.Windows;
         public static bool IsMobile => OS == Platform.iOS || OS == Platform.Android;
         public static bool IsApple => OS == Platform.iOS || OS == Platform.macOS;
+        public static bool IsBrowser => OS == Platform.Browser;
 
         static RuntimeInfo()
         {
@@ -58,6 +59,8 @@ namespace osu.Framework
                 OS = OS == 0 ? Platform.macOS : throw new InvalidOperationException($"Tried to set OS Platform to {nameof(Platform.macOS)}, but is already {Enum.GetName(OS)}");
             if (OperatingSystem.IsLinux())
                 OS = OS == 0 ? Platform.Linux : throw new InvalidOperationException($"Tried to set OS Platform to {nameof(Platform.Linux)}, but is already {Enum.GetName(OS)}");
+            if (OperatingSystem.IsBrowser())
+                OS = OS == 0 ? Platform.Browser : throw new InvalidOperationException($"Tried to set OS Platform to {nameof(Platform.Browser)}, but is already {Enum.GetName(OS)}");
 
             if (OS == 0)
                 throw new PlatformNotSupportedException("Operating system could not be detected correctly.");
@@ -71,7 +74,8 @@ namespace osu.Framework
             Linux = 2,
             macOS = 3,
             iOS = 4,
-            Android = 5
+            Android = 5,
+            Browser = 6
         }
     }
 }
