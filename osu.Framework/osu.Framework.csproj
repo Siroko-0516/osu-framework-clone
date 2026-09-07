@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup Label="Project">
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework Condition="'$(OsuBrowserBuild)' != 'true'">net10.0</TargetFramework>
+    <TargetFramework Condition="'$(OsuBrowserBuild)' == 'true'">net8.0</TargetFramework>
     <OutputType>Library</OutputType>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyTitle>osu!framework</AssemblyTitle>
@@ -11,6 +12,7 @@
     <!--<GenerateDocumentationFile>true</GenerateDocumentationFile>-->
     <NoWarn>$(NoWarn);CS1591;NU5104</NoWarn>
     <DefineConstants>$(DefineConstants);JETBRAINS_ANNOTATIONS</DefineConstants>
+    <DefineConstants Condition="'$(OsuBrowserBuild)' == 'true'">$(DefineConstants);OSU_BROWSER</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Label="Nuget">
     <Title>osu!framework</Title>
