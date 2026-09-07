@@ -4,7 +4,7 @@
 using System;
 using System.Collections.Generic;
 using osu.Framework.Configuration;
-using osu.Framework.Graphics.Rendering.Dummy;
+using osu.Framework.Graphics.Rendering.Browser;
 using osu.Framework.Input.Handlers;
 using osu.Framework.Logging;
 using osu.Framework.Threading;
@@ -21,6 +21,8 @@ namespace osu.Framework.Platform
     /// </remarks>
     public class BrowserGameHost : GameHost
     {
+        private BrowserRenderer? browserRenderer;
+
         public BrowserGameHost(string gameName, HostOptions? options = null)
             : base(gameName, options)
         {
@@ -59,7 +61,22 @@ namespace osu.Framework.Platform
             Array.Empty<InputHandler>();
 
         protected override void ChooseAndSetupRenderer() =>
-            SetupRendererAndWindow(new DummyRenderer(), GraphicsSurfaceType.OpenGL);
+            SetupRendererAndWindow(browserRenderer = new BrowserRenderer(), GraphicsSurfaceType.OpenGL);
+
+        /// <summary>
+        /// Returns the latest backbuffer state produced by the original framework scene graph.
+        /// </summary>
+        public float[] GetBrowserFrameState()
+        {
+            var colour = browserRenderer?.BackbufferClearColour ?? osuTK.Graphics.Color4.Black;
+            var viewport = browserRenderer?.BrowserViewport ?? default;
+
+            return new[]
+            {
+                colour.R, colour.G, colour.B, colour.A,
+                viewport.X, viewport.Y, viewport.Width, viewport.Height
+            };
+        }
 
         protected override void SetupConfig(IDictionary<FrameworkSetting, object> defaultOverrides)
         {
