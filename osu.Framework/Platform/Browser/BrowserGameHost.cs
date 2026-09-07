@@ -64,9 +64,23 @@ namespace osu.Framework.Platform
             base.SetupConfig(defaultOverrides);
         }
 
+        /// <summary>
+        /// Advances the original framework input, update, audio and draw threads by one frame.
+        /// The browser requestAnimationFrame callback is responsible for invoking this method.
+        /// </summary>
+        /// <returns>Whether the host accepted the frame.</returns>
+        public bool PumpFrame()
+        {
+            if (ExecutionState != ExecutionState.Running)
+                return false;
+
+            RunMainLoopFrame();
+            return true;
+        }
+
         protected override void DrawFrame()
         {
-            // Canvas/WebGL rendering is introduced in the next porting phase.
+            // The browser renderer consumes the scene graph draw nodes from this thread.
         }
     }
 }
