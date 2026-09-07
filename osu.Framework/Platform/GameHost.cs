@@ -791,7 +791,7 @@ namespace osu.Framework.Platform
                 {
                     if (Window != null)
                     {
-                        Window.Update += windowUpdate;
+                        Window.Update += RunMainLoopFrame;
                         Window.Suspended += Suspend;
                         Window.Resumed += Resume;
                         Window.LowOnMemory += Collect;
@@ -809,7 +809,7 @@ namespace osu.Framework.Platform
                     else
                     {
                         while (ExecutionState != ExecutionState.Stopped)
-                            windowUpdate();
+                            RunMainLoopFrame();
                     }
                 }
                 catch (OutOfMemoryException)
@@ -1124,7 +1124,7 @@ namespace osu.Framework.Platform
 
         private ThreadRunner threadRunner;
 
-        private void windowUpdate()
+        protected void RunMainLoopFrame()
         {
             inputPerformanceCollectionPeriod?.Dispose();
             inputPerformanceCollectionPeriod = null;
