@@ -28,6 +28,10 @@ namespace osu.Framework.Platform
 
         protected override bool RequireWindowExists => false;
 
+        protected override bool UsesExternalMainLoop => true;
+
+        public override bool CanExit => false;
+
         public override IEnumerable<string> UserStoragePaths => new[] { "/osu-data" };
 
         public override bool OpenFileExternally(string filename)
