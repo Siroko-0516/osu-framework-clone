@@ -3,8 +3,10 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using osu.Framework.Configuration;
 using osu.Framework.Graphics.Rendering.Browser;
+using osu.Framework.Graphics.Rendering.Dummy;
 using osu.Framework.Input.Handlers;
 using osu.Framework.Logging;
 using osu.Framework.Threading;
@@ -71,11 +73,13 @@ namespace osu.Framework.Platform
             var colour = browserRenderer?.BackbufferClearColour ?? osuTK.Graphics.Color4.Black;
             var viewport = browserRenderer?.BrowserViewport ?? default;
 
-            return new[]
+            float[] header = new[]
             {
                 colour.R, colour.G, colour.B, colour.A,
                 viewport.X, viewport.Y, viewport.Width, viewport.Height
             };
+
+            return header.Concat(browserRenderer?.FrameVertices ?? Array.Empty<float>()).ToArray();
         }
 
         protected override void SetupConfig(IDictionary<FrameworkSetting, object> defaultOverrides)
@@ -101,7 +105,7 @@ namespace osu.Framework.Platform
 
         protected override void DrawFrame()
         {
-            // The browser renderer consumes the scene graph draw nodes from this thread.
+            base.DrawFrame();
         }
     }
 }
