@@ -501,7 +501,7 @@ namespace osu.Framework.Platform
 
         protected virtual void DrawFrame()
         {
-            Debug.Assert(Window != null);
+            Debug.Assert(Window != null || UsesExternalMainLoop);
 
             if (Root == null)
                 return;
@@ -509,10 +509,11 @@ namespace osu.Framework.Platform
             if (ExecutionState != ExecutionState.Running)
                 return;
 
-            if (Window.WindowState == WindowState.Minimised)
+            if (Window?.WindowState == WindowState.Minimised)
                 return;
 
-            Renderer.AllowTearing = windowMode.Value == WindowMode.Fullscreen;
+            if (Window != null)
+                Renderer.AllowTearing = windowMode.Value == WindowMode.Fullscreen;
 
             TripleBuffer<DrawNode>.Buffer buffer;
 
@@ -536,7 +537,9 @@ namespace osu.Framework.Platform
             try
             {
                 using (drawMonitor.BeginCollecting(PerformanceCollectionType.DrawReset))
-                    Renderer.BeginFrame(new Vector2(Window.ClientSize.Width, Window.ClientSize.Height));
+                    Renderer.BeginFrame(Window != null
+                        ? new Vector2(Window.ClientSize.Width, Window.ClientSize.Height)
+                        : Root.Size);
 
                 if (!bypassFrontToBackPass.Value)
                 {
@@ -570,7 +573,7 @@ namespace osu.Framework.Platform
                 using (drawMonitor.BeginCollecting(PerformanceCollectionType.SwapBuffer))
                     Swap();
 
-                Window.OnDraw();
+                Window?.OnDraw();
                 didRenderFrame = true;
             }
             finally
@@ -586,7 +589,7 @@ namespace osu.Framework.Platform
         {
             Renderer.SwapBuffers();
 
-            if (Window.GraphicsSurface.Type == GraphicsSurfaceType.OpenGL && Renderer.VerticalSync)
+            if (Window?.GraphicsSurface.Type == GraphicsSurfaceType.OpenGL && Renderer.VerticalSync)
                 // without waiting (i.e. glFinish), vsync is basically unplayable due to the extra latency introduced.
                 // we will likely want to give the user control over this in the future as an advanced setting.
                 Renderer.WaitUntilIdle();
