@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using osu.Framework.Graphics.Primitives;
 using osu.Framework.Graphics.Rendering.Dummy;
 using osu.Framework.Graphics.Rendering.Vertices;
+using osu.Framework.Graphics.Textures;
 using osuTK;
 using osuTK.Graphics;
 
@@ -18,12 +19,22 @@ namespace osu.Framework.Graphics.Rendering.Browser
     public sealed class BrowserRenderer : DummyRenderer
     {
         private readonly List<float> frameVertices = new List<float>();
+        private readonly Queue<BrowserTextureUpload> textureUploads = new Queue<BrowserTextureUpload>();
+        private int nextTextureId;
+        private int currentTextureId;
 
         public Color4 BackbufferClearColour { get; private set; } = Color4.Black;
 
         public RectangleI BrowserViewport { get; private set; }
 
         public float[] FrameVertices => frameVertices.ToArray();
+
+        public BrowserTextureUpload[] TakeTextureUploads()
+        {
+            BrowserTextureUpload[] uploads = textureUploads.ToArray();
+            textureUploads.Clear();
+            return uploads;
+        }
 
         protected internal override void BeginFrame(Vector2 windowSize)
         {
@@ -49,7 +60,24 @@ namespace osu.Framework.Graphics.Rendering.Browser
             frameVertices.Add(textured.Colour.G);
             frameVertices.Add(textured.Colour.B);
             frameVertices.Add(textured.Colour.A);
+            frameVertices.Add(textured.TexturePosition.X);
+            frameVertices.Add(textured.TexturePosition.Y);
+            frameVertices.Add(currentTextureId);
         }
+
+        protected override INativeTexture CreateNativeTexture(int width, int height, bool manualMipmaps = false, TextureFilteringMode filteringMode = TextureFilteringMode.Linear,
+                                                              Color4? initialisationColour = null)
+            => new BrowserNativeTexture(this, ++nextTextureId, width, height);
+
+        protected override bool SetTextureImplementation(INativeTexture? texture, int unit)
+        {
+            if (unit == 0)
+                currentTextureId = (texture as BrowserNativeTexture)?.TextureId ?? 0;
+
+            return true;
+        }
+
+        internal void QueueTextureUpload(BrowserTextureUpload upload) => textureUploads.Enqueue(upload);
 
         protected override void ClearImplementation(ClearInfo clearInfo)
         {
@@ -60,6 +88,18 @@ namespace osu.Framework.Graphics.Rendering.Browser
         {
             BrowserViewport = viewport;
         }
+    }
+
+    public sealed class BrowserTextureUpload
+    {
+        public int TextureId { get; init; }
+        public int TextureWidth { get; init; }
+        public int TextureHeight { get; init; }
+        public int X { get; init; }
+        public int Y { get; init; }
+        public int Width { get; init; }
+        public int Height { get; init; }
+        public byte[] Data { get; init; } = Array.Empty<byte>();
     }
 
     internal sealed class BrowserVertexBatch<TVertex> : IVertexBatch<TVertex>

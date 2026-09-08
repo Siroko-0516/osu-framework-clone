@@ -90,6 +90,12 @@ namespace osu.Framework.Platform
             return header.Concat(browserRenderer?.FrameVertices ?? Array.Empty<float>()).ToArray();
         }
 
+        /// <summary>
+        /// Takes texture regions uploaded by the scene graph since the previous browser frame.
+        /// </summary>
+        public BrowserTextureUpload[] GetBrowserTextureUploads() =>
+            browserRenderer?.TakeTextureUploads() ?? Array.Empty<BrowserTextureUpload>();
+
         protected override void SetupConfig(IDictionary<FrameworkSetting, object> defaultOverrides)
         {
             defaultOverrides[FrameworkSetting.AudioDevice] = "No sound";
