@@ -55,7 +55,7 @@ namespace osu.Framework.Threading
 
         private void onNewFrame()
         {
-            if (frameCount++ % 1000 == 0)
+            if (!RuntimeInfo.IsBrowser && frameCount++ % 1000 == 0)
                 cpu_usage.Value = Bass.CPUUsage;
 
             lock (managers)
