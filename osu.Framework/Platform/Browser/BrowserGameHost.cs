@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using osu.Framework.Configuration;
+using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Rendering.Browser;
 using osu.Framework.Graphics.Rendering.Dummy;
 using osu.Framework.Input.Handlers;
@@ -62,8 +63,15 @@ namespace osu.Framework.Platform
         protected override IEnumerable<InputHandler> CreateAvailableInputHandlers() =>
             Array.Empty<InputHandler>();
 
-        protected override void ChooseAndSetupRenderer() =>
+        protected override void ChooseAndSetupRenderer()
+        {
             SetupRendererAndWindow(browserRenderer = new BrowserRenderer(), GraphicsSurfaceType.OpenGL);
+
+            // A browser has a WebGL surface owned by JavaScript rather than an IWindow. The
+            // normal setup path returns early for windowless hosts, so complete the renderer's
+            // common initialisation here (default batches, disposal queues and frame state).
+            ((IRenderer)browserRenderer).Initialise(new BrowserGraphicsSurface());
+        }
 
         /// <summary>
         /// Returns the latest backbuffer state produced by the original framework scene graph.
