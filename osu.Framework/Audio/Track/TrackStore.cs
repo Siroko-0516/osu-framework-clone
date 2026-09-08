@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 #nullable disable
@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using JetBrains.Annotations;
 using osu.Framework.Audio.Mixing;
 using osu.Framework.IO.Stores;
+using osu.Framework.Platform;
 
 namespace osu.Framework.Audio.Track
 {
@@ -47,12 +48,24 @@ namespace osu.Framework.Audio.Track
             if (dataStream == null)
                 return null;
 
-            TrackBass trackBass = new TrackBass(dataStream, name);
+            Track track;
+            if (RuntimeInfo.IsBrowser)
+            {
+                var factory = BrowserTrackProvider.CreateTrack;
+                if (factory == null)
+                {
+                    dataStream.Dispose();
+                    throw new InvalidOperationException("The browser audio track provider has not been initialised.");
+                }
+                track = factory(dataStream, name);
+            }
+            else
+                track = new TrackBass(dataStream, name);
 
-            mixer.Add(trackBass);
-            AddItem(trackBass);
+            mixer.Add(track);
+            AddItem(track);
 
-            return trackBass;
+            return track;
         }
 
         public Task<Track> GetAsync(string name, CancellationToken cancellationToken = default) =>
