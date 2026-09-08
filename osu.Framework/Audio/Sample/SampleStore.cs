@@ -1,4 +1,4 @@
-﻿// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
+// Copyright (c) ppy Pty Ltd <contact@ppy.sh>. Licensed under the MIT Licence.
 // See the LICENCE file in the repository root for full licence text.
 
 #nullable disable
@@ -13,6 +13,7 @@ using osu.Framework.Audio.Mixing;
 using osu.Framework.Audio.Mixing.Bass;
 using osu.Framework.IO.Stores;
 using osu.Framework.Statistics;
+using osu.Framework.Platform;
 
 namespace osu.Framework.Audio.Sample
 {
@@ -22,6 +23,7 @@ namespace osu.Framework.Audio.Sample
         private readonly AudioMixer mixer;
 
         private readonly Dictionary<string, SampleBassFactory> factories = new Dictionary<string, SampleBassFactory>();
+        private readonly Dictionary<string, BrowserSampleFactory> browserFactories = new Dictionary<string, BrowserSampleFactory>();
 
         public int PlaybackConcurrency { get; set; } = Sample.DEFAULT_CONCURRENCY;
 
@@ -41,6 +43,9 @@ namespace osu.Framework.Audio.Sample
             ObjectDisposedException.ThrowIf(IsDisposed, this);
 
             if (string.IsNullOrEmpty(name)) return null;
+
+            if (RuntimeInfo.IsBrowser)
+                return getBrowserSample(name);
 
             lock (factories)
             {
@@ -62,8 +67,35 @@ namespace osu.Framework.Audio.Sample
         public Task<Sample> GetAsync(string name, CancellationToken cancellationToken = default) =>
             Task.Run(() => Get(name), cancellationToken);
 
+        private Sample getBrowserSample(string name)
+        {
+            lock (browserFactories)
+            {
+                if (!browserFactories.TryGetValue(name, out var factory))
+                {
+                    byte[] data = store.Get(name);
+                    if (data == null)
+                        browserFactories[name] = null;
+                    else
+                    {
+                        var create = BrowserSampleFactory.CreateFactory ?? throw new InvalidOperationException("The browser sample provider has not been initialised.");
+                        factory = browserFactories[name] = create(data, name, mixer);
+                        factory.PlaybackConcurrency.Value = PlaybackConcurrency;
+                        AddItem(factory);
+                    }
+                }
+                return factory?.CreateSample();
+            }
+        }
+
         public void Invalidate(string name)
         {
+            lock (browserFactories)
+            {
+                if (browserFactories.Remove(name, out var browserFactory) && browserFactory != null)
+                    // Keep it in the update collection until queued disposal releases browser resources.
+                    browserFactory.Dispose();
+            }
             lock (factories)
             {
                 if (factories.Remove(name, out var factory))
@@ -74,7 +106,7 @@ namespace osu.Framework.Audio.Sample
         protected override void UpdateState()
         {
             // ReSharper disable once InconsistentlySynchronizedField (synchronisation not necessary for count check).
-            FrameStatistics.Add(StatisticsCounterType.Samples, factories.Count);
+            FrameStatistics.Add(StatisticsCounterType.Samples, factories.Count + browserFactories.Count);
             base.UpdateState();
         }
 
