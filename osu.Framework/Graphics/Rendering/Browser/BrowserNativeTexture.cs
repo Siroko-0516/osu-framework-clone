@@ -78,8 +78,12 @@ namespace osu.Framework.Graphics.Rendering.Browser
 
         public void Dispose()
         {
+            if (!Available)
+                return;
+
             FlushUploads();
             Available = false;
+            renderer.QueueTextureDeletion(TextureId);
         }
     }
 }

@@ -3,7 +3,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using osu.Framework.Configuration;
 using osu.Framework.Graphics.Rendering;
 using osu.Framework.Graphics.Rendering.Browser;
@@ -78,16 +77,7 @@ namespace osu.Framework.Platform
         /// </summary>
         public float[] GetBrowserFrameState()
         {
-            var colour = browserRenderer?.BackbufferClearColour ?? osuTK.Graphics.Color4.Black;
-            var viewport = browserRenderer?.BrowserViewport ?? default;
-
-            float[] header = new[]
-            {
-                colour.R, colour.G, colour.B, colour.A,
-                viewport.X, viewport.Y, viewport.Width, viewport.Height
-            };
-
-            return header.Concat(browserRenderer?.FrameVertices ?? Array.Empty<float>()).ToArray();
+            return browserRenderer?.CreateFrameState() ?? Array.Empty<float>();
         }
 
         /// <summary>

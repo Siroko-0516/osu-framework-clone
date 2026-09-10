@@ -27,7 +27,20 @@ namespace osu.Framework.Graphics.Rendering.Browser
 
         public RectangleI BrowserViewport { get; private set; }
 
-        public float[] FrameVertices => frameVertices.ToArray();
+        public float[] CreateFrameState()
+        {
+            float[] state = new float[8 + frameVertices.Count];
+            state[0] = BackbufferClearColour.R;
+            state[1] = BackbufferClearColour.G;
+            state[2] = BackbufferClearColour.B;
+            state[3] = BackbufferClearColour.A;
+            state[4] = BrowserViewport.X;
+            state[5] = BrowserViewport.Y;
+            state[6] = BrowserViewport.Width;
+            state[7] = BrowserViewport.Height;
+            frameVertices.CopyTo(state, 8);
+            return state;
+        }
 
         public BrowserTextureUpload[] TakeTextureUploads()
         {
@@ -43,10 +56,10 @@ namespace osu.Framework.Graphics.Rendering.Browser
         }
 
         protected override IVertexBatch<TVertex> CreateLinearBatch<TVertex>(int size, int maxBuffers, PrimitiveTopology topology)
-            => new BrowserVertexBatch<TVertex>(this, size);
+            => new BrowserVertexBatch<TVertex>(this, size, false);
 
         protected override IVertexBatch<TVertex> CreateQuadBatch<TVertex>(int size, int maxBuffers)
-            => new BrowserVertexBatch<TVertex>(this, size);
+            => new BrowserVertexBatch<TVertex>(this, size, true);
 
         internal void CaptureVertex<TVertex>(TVertex vertex)
             where TVertex : unmanaged, IEquatable<TVertex>, IVertex
@@ -65,6 +78,51 @@ namespace osu.Framework.Graphics.Rendering.Browser
             frameVertices.Add(currentTextureId);
         }
 
+        internal void CaptureQuad(ReadOnlySpan<TexturedVertex2D> vertices, int textureId)
+        {
+            if (vertices.Length != 4 || frameVertices.Count >= 240000)
+                return;
+
+            float minX = float.MaxValue;
+            float minY = float.MaxValue;
+            float maxX = float.MinValue;
+            float maxY = float.MinValue;
+            float maxAlpha = 0;
+
+            foreach (TexturedVertex2D vertex in vertices)
+            {
+                minX = Math.Min(minX, vertex.Position.X);
+                minY = Math.Min(minY, vertex.Position.Y);
+                maxX = Math.Max(maxX, vertex.Position.X);
+                maxY = Math.Max(maxY, vertex.Position.Y);
+                maxAlpha = Math.Max(maxAlpha, vertex.Colour.A);
+            }
+
+            // Keep gameplay and judgement data intact; only omit geometry which
+            // cannot contribute a pixel to the current browser backbuffer.
+            if (maxAlpha <= 0.001f
+                || maxX < BrowserViewport.X
+                || maxY < BrowserViewport.Y
+                || minX > BrowserViewport.X + BrowserViewport.Width
+                || minY > BrowserViewport.Y + BrowserViewport.Height)
+                return;
+
+            foreach (TexturedVertex2D vertex in vertices)
+            {
+                frameVertices.Add(vertex.Position.X);
+                frameVertices.Add(vertex.Position.Y);
+                frameVertices.Add(vertex.Colour.R);
+                frameVertices.Add(vertex.Colour.G);
+                frameVertices.Add(vertex.Colour.B);
+                frameVertices.Add(vertex.Colour.A);
+                frameVertices.Add(vertex.TexturePosition.X);
+                frameVertices.Add(vertex.TexturePosition.Y);
+                frameVertices.Add(textureId);
+            }
+        }
+
+        internal int CurrentTextureId => currentTextureId;
+
         protected override INativeTexture CreateNativeTexture(int width, int height, bool manualMipmaps = false, TextureFilteringMode filteringMode = TextureFilteringMode.Linear,
                                                               Color4? initialisationColour = null)
             => new BrowserNativeTexture(this, ++nextTextureId, width, height);
@@ -78,6 +136,12 @@ namespace osu.Framework.Graphics.Rendering.Browser
         }
 
         internal void QueueTextureUpload(BrowserTextureUpload upload) => textureUploads.Enqueue(upload);
+
+        internal void QueueTextureDeletion(int textureId) => textureUploads.Enqueue(new BrowserTextureUpload
+        {
+            TextureId = textureId,
+            Deleted = true,
+        });
 
         protected override void ClearImplementation(ClearInfo clearInfo)
         {
@@ -93,6 +157,7 @@ namespace osu.Framework.Graphics.Rendering.Browser
     public sealed class BrowserTextureUpload
     {
         public int TextureId { get; init; }
+        public bool Deleted { get; init; }
         public int TextureWidth { get; init; }
         public int TextureHeight { get; init; }
         public int X { get; init; }
@@ -106,11 +171,16 @@ namespace osu.Framework.Graphics.Rendering.Browser
         where TVertex : unmanaged, IEquatable<TVertex>, IVertex
     {
         private readonly BrowserRenderer renderer;
+        private readonly bool cullQuads;
+        private readonly TexturedVertex2D[] quad = new TexturedVertex2D[4];
+        private int quadCount;
+        private int quadTextureId;
         private int count;
 
-        public BrowserVertexBatch(BrowserRenderer renderer, int size)
+        public BrowserVertexBatch(BrowserRenderer renderer, int size, bool cullQuads)
         {
             this.renderer = renderer;
+            this.cullQuads = cullQuads;
             Size = size;
             AddAction = Add;
         }
@@ -122,7 +192,22 @@ namespace osu.Framework.Graphics.Rendering.Browser
         public void Add(TVertex vertex)
         {
             renderer.SetActiveBatch(this);
-            renderer.CaptureVertex(vertex);
+            if (cullQuads && vertex is TexturedVertex2D textured)
+            {
+                if (quadCount == 0)
+                    quadTextureId = renderer.CurrentTextureId;
+
+                quad[quadCount++] = textured;
+                if (quadCount == quad.Length)
+                {
+                    renderer.CaptureQuad(quad, quadTextureId);
+                    quadCount = 0;
+                }
+            }
+            else
+            {
+                renderer.CaptureVertex(vertex);
+            }
             count++;
         }
 
@@ -130,10 +215,15 @@ namespace osu.Framework.Graphics.Rendering.Browser
         {
             int drawn = count;
             count = 0;
+            quadCount = 0;
             return drawn;
         }
 
-        void IVertexBatch.ResetCounters() => count = 0;
+        void IVertexBatch.ResetCounters()
+        {
+            count = 0;
+            quadCount = 0;
+        }
 
         public void Dispose()
         {
