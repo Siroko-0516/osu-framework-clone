@@ -23,6 +23,8 @@ namespace osu.Framework.Graphics.Rendering.Browser
         private int nextTextureId;
         private int currentTextureId;
 
+        public bool CaptureEnabled { get; set; } = true;
+
         public Color4 BackbufferClearColour { get; private set; } = Color4.Black;
 
         public RectangleI BrowserViewport { get; private set; }
@@ -64,7 +66,7 @@ namespace osu.Framework.Graphics.Rendering.Browser
         internal void CaptureVertex<TVertex>(TVertex vertex)
             where TVertex : unmanaged, IEquatable<TVertex>, IVertex
         {
-            if (vertex is not TexturedVertex2D textured || frameVertices.Count >= 240000)
+            if (!CaptureEnabled || vertex is not TexturedVertex2D textured || frameVertices.Count >= 240000)
                 return;
 
             frameVertices.Add(textured.Position.X);
@@ -80,7 +82,7 @@ namespace osu.Framework.Graphics.Rendering.Browser
 
         internal void CaptureQuad(ReadOnlySpan<TexturedVertex2D> vertices, int textureId)
         {
-            if (vertices.Length != 4 || frameVertices.Count >= 240000)
+            if (!CaptureEnabled || vertices.Length != 4 || frameVertices.Count >= 240000)
                 return;
 
             float minX = float.MaxValue;
