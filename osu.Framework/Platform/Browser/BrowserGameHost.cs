@@ -98,10 +98,13 @@ namespace osu.Framework.Platform
         /// The browser requestAnimationFrame callback is responsible for invoking this method.
         /// </summary>
         /// <returns>Whether the host accepted the frame.</returns>
-        public bool PumpFrame()
+        public bool PumpFrame(bool captureFrame = true)
         {
             if (ExecutionState != ExecutionState.Running)
                 return false;
+
+            if (browserRenderer != null)
+                browserRenderer.CaptureEnabled = captureFrame;
 
             RunMainLoopFrame();
             return true;
