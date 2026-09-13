@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using osu.Framework.Graphics.Primitives;
 using osu.Framework.Graphics.Rendering.Dummy;
 using osu.Framework.Graphics.Rendering.Vertices;
@@ -31,18 +32,19 @@ namespace osu.Framework.Graphics.Rendering.Browser
 
         public RectangleI BrowserViewport { get; private set; }
 
-        public float[] CreateFrameState()
+        public byte[] CreateFrameState()
         {
-            float[] state = new float[8 + frameVertexCount];
-            state[0] = BackbufferClearColour.R;
-            state[1] = BackbufferClearColour.G;
-            state[2] = BackbufferClearColour.B;
-            state[3] = BackbufferClearColour.A;
-            state[4] = BrowserViewport.X;
-            state[5] = BrowserViewport.Y;
-            state[6] = BrowserViewport.Width;
-            state[7] = BrowserViewport.Height;
-            Array.Copy(frameVertices, 0, state, 8, frameVertexCount);
+            byte[] state = new byte[(8 + frameVertexCount) * sizeof(float)];
+            Span<float> values = MemoryMarshal.Cast<byte, float>(state);
+            values[0] = BackbufferClearColour.R;
+            values[1] = BackbufferClearColour.G;
+            values[2] = BackbufferClearColour.B;
+            values[3] = BackbufferClearColour.A;
+            values[4] = BrowserViewport.X;
+            values[5] = BrowserViewport.Y;
+            values[6] = BrowserViewport.Width;
+            values[7] = BrowserViewport.Height;
+            frameVertices.AsSpan(0, frameVertexCount).CopyTo(values[8..]);
             return state;
         }
 
