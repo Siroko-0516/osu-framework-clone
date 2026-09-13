@@ -75,9 +75,9 @@ namespace osu.Framework.Platform
         /// <summary>
         /// Returns the latest backbuffer state produced by the original framework scene graph.
         /// </summary>
-        public float[] GetBrowserFrameState()
+        public byte[] GetBrowserFrameState()
         {
-            return browserRenderer?.CreateFrameState() ?? Array.Empty<float>();
+            return browserRenderer?.CreateFrameState() ?? Array.Empty<byte>();
         }
 
         /// <summary>
