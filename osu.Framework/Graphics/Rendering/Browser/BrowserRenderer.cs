@@ -18,7 +18,9 @@ namespace osu.Framework.Graphics.Rendering.Browser
     /// </summary>
     public sealed class BrowserRenderer : DummyRenderer
     {
-        private readonly List<float> frameVertices = new List<float>();
+        private const int max_frame_floats = 240000;
+        private readonly float[] frameVertices = new float[max_frame_floats];
+        private int frameVertexCount;
         private readonly Queue<BrowserTextureUpload> textureUploads = new Queue<BrowserTextureUpload>();
         private int nextTextureId;
         private int currentTextureId;
@@ -31,7 +33,7 @@ namespace osu.Framework.Graphics.Rendering.Browser
 
         public float[] CreateFrameState()
         {
-            float[] state = new float[8 + frameVertices.Count];
+            float[] state = new float[8 + frameVertexCount];
             state[0] = BackbufferClearColour.R;
             state[1] = BackbufferClearColour.G;
             state[2] = BackbufferClearColour.B;
@@ -40,7 +42,7 @@ namespace osu.Framework.Graphics.Rendering.Browser
             state[5] = BrowserViewport.Y;
             state[6] = BrowserViewport.Width;
             state[7] = BrowserViewport.Height;
-            frameVertices.CopyTo(state, 8);
+            Array.Copy(frameVertices, 0, state, 8, frameVertexCount);
             return state;
         }
 
@@ -53,7 +55,7 @@ namespace osu.Framework.Graphics.Rendering.Browser
 
         protected internal override void BeginFrame(Vector2 windowSize)
         {
-            frameVertices.Clear();
+            frameVertexCount = 0;
             base.BeginFrame(windowSize);
         }
 
@@ -66,23 +68,15 @@ namespace osu.Framework.Graphics.Rendering.Browser
         internal void CaptureVertex<TVertex>(TVertex vertex)
             where TVertex : unmanaged, IEquatable<TVertex>, IVertex
         {
-            if (!CaptureEnabled || vertex is not TexturedVertex2D textured || frameVertices.Count >= 240000)
+            if (!CaptureEnabled || vertex is not TexturedVertex2D textured || frameVertexCount + 9 > max_frame_floats)
                 return;
 
-            frameVertices.Add(textured.Position.X);
-            frameVertices.Add(textured.Position.Y);
-            frameVertices.Add(textured.Colour.R);
-            frameVertices.Add(textured.Colour.G);
-            frameVertices.Add(textured.Colour.B);
-            frameVertices.Add(textured.Colour.A);
-            frameVertices.Add(textured.TexturePosition.X);
-            frameVertices.Add(textured.TexturePosition.Y);
-            frameVertices.Add(currentTextureId);
+            appendVertex(textured, currentTextureId);
         }
 
         internal void CaptureQuad(ReadOnlySpan<TexturedVertex2D> vertices, int textureId)
         {
-            if (!CaptureEnabled || vertices.Length != 4 || frameVertices.Count >= 240000)
+            if (!CaptureEnabled || vertices.Length != 4 || frameVertexCount + 36 > max_frame_floats)
                 return;
 
             float minX = float.MaxValue;
@@ -111,16 +105,21 @@ namespace osu.Framework.Graphics.Rendering.Browser
 
             foreach (TexturedVertex2D vertex in vertices)
             {
-                frameVertices.Add(vertex.Position.X);
-                frameVertices.Add(vertex.Position.Y);
-                frameVertices.Add(vertex.Colour.R);
-                frameVertices.Add(vertex.Colour.G);
-                frameVertices.Add(vertex.Colour.B);
-                frameVertices.Add(vertex.Colour.A);
-                frameVertices.Add(vertex.TexturePosition.X);
-                frameVertices.Add(vertex.TexturePosition.Y);
-                frameVertices.Add(textureId);
+                appendVertex(vertex, textureId);
             }
+        }
+
+        private void appendVertex(TexturedVertex2D vertex, int textureId)
+        {
+            frameVertices[frameVertexCount++] = vertex.Position.X;
+            frameVertices[frameVertexCount++] = vertex.Position.Y;
+            frameVertices[frameVertexCount++] = vertex.Colour.R;
+            frameVertices[frameVertexCount++] = vertex.Colour.G;
+            frameVertices[frameVertexCount++] = vertex.Colour.B;
+            frameVertices[frameVertexCount++] = vertex.Colour.A;
+            frameVertices[frameVertexCount++] = vertex.TexturePosition.X;
+            frameVertices[frameVertexCount++] = vertex.TexturePosition.Y;
+            frameVertices[frameVertexCount++] = textureId;
         }
 
         internal int CurrentTextureId => currentTextureId;
