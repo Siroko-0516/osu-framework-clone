@@ -22,6 +22,7 @@ namespace osu.Framework.Graphics.Rendering.Browser
         private const int max_frame_floats = 240000;
         private readonly float[] frameVertices = new float[max_frame_floats];
         private int frameVertexCount;
+        private byte[] frameState = new byte[32 * sizeof(float)];
         private readonly Queue<BrowserTextureUpload> textureUploads = new Queue<BrowserTextureUpload>();
         private int nextTextureId;
         private int currentTextureId;
@@ -34,18 +35,28 @@ namespace osu.Framework.Graphics.Rendering.Browser
 
         public byte[] CreateFrameState()
         {
-            byte[] state = new byte[(8 + frameVertexCount) * sizeof(float)];
-            Span<float> values = MemoryMarshal.Cast<byte, float>(state);
+            int requiredBytes = (8 + frameVertexCount) * sizeof(float);
+            if (frameState.Length < requiredBytes)
+            {
+                int capacity = frameState.Length;
+                while (capacity < requiredBytes)
+                    capacity *= 2;
+                Array.Resize(ref frameState, capacity);
+            }
+
+            Span<float> values = MemoryMarshal.Cast<byte, float>(frameState);
             values[0] = BackbufferClearColour.R;
             values[1] = BackbufferClearColour.G;
             values[2] = BackbufferClearColour.B;
             values[3] = BackbufferClearColour.A;
-            values[4] = BrowserViewport.X;
-            values[5] = BrowserViewport.Y;
+            // The backing buffer is intentionally reused to avoid a large managed allocation
+            // on every browser frame. Store the live payload size so JavaScript ignores tail data.
+            values[4] = frameVertexCount;
+            values[5] = 0;
             values[6] = BrowserViewport.Width;
             values[7] = BrowserViewport.Height;
             frameVertices.AsSpan(0, frameVertexCount).CopyTo(values[8..]);
-            return state;
+            return frameState;
         }
 
         public BrowserTextureUpload[] TakeTextureUploads()
