@@ -22,6 +22,7 @@ namespace osu.Framework.Graphics.Rendering.Browser
         private const int max_frame_floats = 240000;
         private readonly float[] frameVertices = new float[max_frame_floats];
         private int frameVertexCount;
+        private byte[] frameState = new byte[8 * sizeof(float)];
         private readonly Queue<BrowserTextureUpload> textureUploads = new Queue<BrowserTextureUpload>();
         private int nextTextureId;
         private int currentTextureId;
@@ -34,18 +35,31 @@ namespace osu.Framework.Graphics.Rendering.Browser
 
         public byte[] CreateFrameState()
         {
-            byte[] state = new byte[(8 + frameVertexCount) * sizeof(float)];
-            Span<float> values = MemoryMarshal.Cast<byte, float>(state);
+            int requiredBytes = (8 + frameVertexCount) * sizeof(float);
+
+            // JS copies the live portion before this call completes, so the managed
+            // transport buffer can be reused. Growing geometrically avoids allocating
+            // and collecting a large byte array on every gameplay frame.
+            if (frameState.Length < requiredBytes)
+            {
+                int capacity = frameState.Length;
+                while (capacity < requiredBytes)
+                    capacity = Math.Min((8 + max_frame_floats) * sizeof(float), capacity * 2);
+
+                frameState = new byte[capacity];
+            }
+
+            Span<float> values = MemoryMarshal.Cast<byte, float>(frameState);
             values[0] = BackbufferClearColour.R;
             values[1] = BackbufferClearColour.G;
             values[2] = BackbufferClearColour.B;
             values[3] = BackbufferClearColour.A;
-            values[4] = BrowserViewport.X;
-            values[5] = BrowserViewport.Y;
+            values[4] = frameVertexCount;
+            values[5] = 0;
             values[6] = BrowserViewport.Width;
             values[7] = BrowserViewport.Height;
             frameVertices.AsSpan(0, frameVertexCount).CopyTo(values[8..]);
-            return state;
+            return frameState;
         }
 
         public BrowserTextureUpload[] TakeTextureUploads()
