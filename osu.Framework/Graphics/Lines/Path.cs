@@ -317,7 +317,32 @@ namespace osu.Framework.Graphics.Lines
 
         private readonly BufferedDrawNodeSharedData sharedData = new BufferedDrawNodeSharedData(TexturePixelFormat.R16Float, clipToRootNode: true);
 
-        protected override DrawNode CreateDrawNode() => new PathBufferedDrawNode(this, new PathDrawNode(this), sharedData);
+        protected override DrawNode CreateDrawNode() => renderer is osu.Framework.Graphics.Rendering.Browser.BrowserRenderer
+            ? new BrowserPathDrawNode(this)
+            : new PathBufferedDrawNode(this, new PathDrawNode(this), sharedData);
+
+        private sealed class BrowserPathDrawNode : DrawNode
+        {
+            private new Path Source => (Path)base.Source;
+            private readonly List<Line> segments = new List<Line>();
+            private float radius;
+            private Texture texture;
+            public BrowserPathDrawNode(Path source) : base(source) { }
+            public override void ApplyState()
+            {
+                base.ApplyState();
+                segments.Clear();
+                segments.AddRange(Source.segments);
+                radius = Source.PathRadius;
+                texture = Source.Texture;
+            }
+            protected override void Draw(IRenderer renderer)
+            {
+                base.Draw(renderer);
+                ((osu.Framework.Graphics.Rendering.Browser.BrowserRenderer)renderer).CapturePath(
+                    segments, radius, DrawInfo.Matrix, texture, DrawColourInfo.Colour.TopLeft.Linear);
+            }
+        }
 
         private class PathBufferedDrawNode : BufferedDrawNode
         {
