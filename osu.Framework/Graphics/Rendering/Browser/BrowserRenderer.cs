@@ -19,7 +19,9 @@ namespace osu.Framework.Graphics.Rendering.Browser
     /// </summary>
     public sealed class BrowserRenderer : DummyRenderer
     {
-        private const int max_frame_floats = 240000;
+        public const int QuadStride = 76;
+        private const int max_frame_floats = QuadStride * 6000;
+        private int pathSequence;
         private readonly float[] frameVertices = new float[max_frame_floats];
         private int frameVertexCount;
         private byte[] frameState = new byte[8 * sizeof(float)];
@@ -49,13 +51,16 @@ namespace osu.Framework.Graphics.Rendering.Browser
                 frameState = new byte[capacity];
             }
 
+            if (frameState.Length > 65536 && requiredBytes < frameState.Length / 4)
+                frameState = new byte[Math.Max(65536, requiredBytes * 2)];
+
             Span<float> values = MemoryMarshal.Cast<byte, float>(frameState);
             values[0] = BackbufferClearColour.R;
             values[1] = BackbufferClearColour.G;
             values[2] = BackbufferClearColour.B;
             values[3] = BackbufferClearColour.A;
             values[4] = frameVertexCount;
-            values[5] = 0;
+            values[5] = 1;
             values[6] = BrowserViewport.Width;
             values[7] = BrowserViewport.Height;
             frameVertices.AsSpan(0, frameVertexCount).CopyTo(values[8..]);
@@ -72,27 +77,19 @@ namespace osu.Framework.Graphics.Rendering.Browser
         protected internal override void BeginFrame(Vector2 windowSize)
         {
             frameVertexCount = 0;
+            pathSequence = 0;
             base.BeginFrame(windowSize);
         }
 
         protected override IVertexBatch<TVertex> CreateLinearBatch<TVertex>(int size, int maxBuffers, PrimitiveTopology topology)
-            => new BrowserVertexBatch<TVertex>(this, size, false);
+            => new BrowserVertexBatch<TVertex>(this, size, false, topology);
 
         protected override IVertexBatch<TVertex> CreateQuadBatch<TVertex>(int size, int maxBuffers)
             => new BrowserVertexBatch<TVertex>(this, size, true);
 
-        internal void CaptureVertex<TVertex>(TVertex vertex)
-            where TVertex : unmanaged, IEquatable<TVertex>, IVertex
+        internal void CaptureQuad(ReadOnlySpan<TexturedVertex2D> vertices, int textureId, int pathId = 0, float capsuleLength = 0, Vector4 gradientRect = default)
         {
-            if (!CaptureEnabled || vertex is not TexturedVertex2D textured || frameVertexCount + 9 > max_frame_floats)
-                return;
-
-            appendVertex(textured, currentTextureId);
-        }
-
-        internal void CaptureQuad(ReadOnlySpan<TexturedVertex2D> vertices, int textureId)
-        {
-            if (!CaptureEnabled || vertices.Length != 4 || frameVertexCount + 36 > max_frame_floats)
+            if (!CaptureEnabled || vertices.Length != 4 || frameVertexCount + QuadStride > max_frame_floats)
                 return;
 
             float minX = float.MaxValue;
@@ -122,6 +119,53 @@ namespace osu.Framework.Graphics.Rendering.Browser
             foreach (TexturedVertex2D vertex in vertices)
             {
                 appendVertex(vertex, textureId);
+            }
+            var m = CurrentMaskingInfo;
+            var b = CurrentBlendingParameters;
+            var r = m.MaskingRect;
+            var c = m.BorderColour.TopLeft.Linear;
+            var t = m.ToMaskingSpace;
+            var scissor = ScissorState ? Scissor : BrowserViewport;
+            ReadOnlySpan<float> metadata = stackalloc float[] { scissor.X, scissor.Y, scissor.Width, scissor.Height,
+                t.Row0.X, t.Row1.X, t.Row2.X, t.Row0.Y, t.Row1.Y, t.Row2.Y,
+                r.X, r.Y, r.Width, r.Height, m.CornerRadius, m.BorderThickness,
+                c.R, c.G, c.B, c.A, IsMaskingActive ? 1 : 0, pathId, capsuleLength,
+                gradientRect.X, gradientRect.Y, gradientRect.Z, gradientRect.W,
+                (int)b.Source, (int)b.Destination, (int)b.SourceAlpha, (int)b.DestinationAlpha,
+                (int)b.RGBEquation, (int)b.AlphaEquation, m.Hollow ? 1 : 0,
+                m.CornerExponent, m.BlendRange, m.AlphaExponent, m.HollowCornerRadius, m.EdgeOffset.X, m.EdgeOffset.Y };
+            metadata.CopyTo(frameVertices.AsSpan(frameVertexCount));
+            frameVertexCount += metadata.Length;
+        }
+
+        public void CapturePath(IReadOnlyList<Line> segments, float radius, Matrix3 matrix, Texture texture, Color4 colour)
+        {
+            if (radius <= 0 || segments.Count == 0 || !texture.Bind()) return;
+            int id = ++pathSequence;
+            int textureId = currentTextureId;
+            var rect = texture.GetTextureRect();
+            var gradient = new Vector4(rect.X, rect.Y, rect.Width, rect.Height);
+            Span<TexturedVertex2D> vertices = stackalloc TexturedVertex2D[4];
+            foreach (var line in segments)
+            {
+                Vector2 delta = line.EndPoint - line.StartPoint;
+                float length = delta.Length;
+                Vector2 direction = length > 0.0001f ? delta / length : Vector2.UnitX;
+                Vector2 normal = new Vector2(-direction.Y, direction.X);
+                for (int i = 0; i < 4; i++)
+                {
+                    float x = i == 0 || i == 3 ? -1 : length / radius + 1;
+                    float y = i < 2 ? -1 : 1;
+                    Vector2 p = line.StartPoint + radius * (direction * x + normal * y);
+                    vertices[i] = new TexturedVertex2D(this)
+                    {
+                        Position = new Vector2(p.X * matrix.Row0.X + p.Y * matrix.Row1.X + matrix.Row2.X,
+                            p.X * matrix.Row0.Y + p.Y * matrix.Row1.Y + matrix.Row2.Y),
+                        Colour = colour,
+                        TexturePosition = new Vector2(x, y),
+                    };
+                }
+                CaptureQuad(vertices, textureId, id, length / radius, gradient);
             }
         }
 
@@ -189,15 +233,17 @@ namespace osu.Framework.Graphics.Rendering.Browser
     {
         private readonly BrowserRenderer renderer;
         private readonly bool cullQuads;
+        private readonly PrimitiveTopology topology;
         private readonly TexturedVertex2D[] quad = new TexturedVertex2D[4];
         private int quadCount;
         private int quadTextureId;
         private int count;
 
-        public BrowserVertexBatch(BrowserRenderer renderer, int size, bool cullQuads)
+        public BrowserVertexBatch(BrowserRenderer renderer, int size, bool cullQuads, PrimitiveTopology topology = PrimitiveTopology.Triangles)
         {
             this.renderer = renderer;
             this.cullQuads = cullQuads;
+            this.topology = topology;
             Size = size;
             AddAction = Add;
         }
@@ -209,21 +255,22 @@ namespace osu.Framework.Graphics.Rendering.Browser
         public void Add(TVertex vertex)
         {
             renderer.SetActiveBatch(this);
-            if (cullQuads && vertex is TexturedVertex2D textured)
+            if (vertex is TexturedVertex2D textured && (cullQuads || topology == PrimitiveTopology.Triangles || topology == PrimitiveTopology.TriangleStrip))
             {
                 if (quadCount == 0)
                     quadTextureId = renderer.CurrentTextureId;
 
                 quad[quadCount++] = textured;
-                if (quadCount == quad.Length)
+                if (quadCount == (cullQuads ? 4 : 3))
                 {
+                    if (!cullQuads) quad[3] = quad[2];
                     renderer.CaptureQuad(quad, quadTextureId);
-                    quadCount = 0;
+                    if (!cullQuads && topology == PrimitiveTopology.TriangleStrip)
+                    {
+                        quad[0] = quad[1]; quad[1] = quad[2]; quadCount = 2;
+                    }
+                    else quadCount = 0;
                 }
-            }
-            else
-            {
-                renderer.CaptureVertex(vertex);
             }
             count++;
         }
